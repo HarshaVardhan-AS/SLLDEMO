@@ -5,8 +5,6 @@ const auth = firebase.auth();
 auth.onAuthStateChanged(user => {
   if (user) {
     // --- USER IS LOGGED IN ---
-    // All of your original code now goes INSIDE here
-    
     console.log("User is logged in:", user.email);
 
     const videos = [
@@ -16,7 +14,7 @@ auth.onAuthStateChanged(user => {
       { id: "4", title: "Responsive Web Design Tutorial 2024", videoId: "srvUrASNj0s", channel: "Design Hub", views: "25K", time: "5 days ago" },
       { id: "5", title: "Flexbox in CSS Explained Simply", videoId: "JJSoEo8JSnc", channel: "Web Dev Simplified", views: "80K", time: "2 months ago" },
       { id: "6", title: "CSS Grid Crash Course", videoId: "jV8B24rSN5o", channel: "Traversy Media", views: "300K", time: "6 months ago" },
-      { id: "7," title: "JavaScript ES6 Features", videoId: "NCwa_xi0Uuc", channel: "Programming with Mosh", views: "1.3M", time: "8 months ago" },
+      { id: "7", title: "JavaScript ES6 Features", videoId: "NCwa_xi0Uuc", channel: "Programming with Mosh", views: "1.3M", time: "8 months ago" },
       { id: "8", title: "VS Code Tips & Tricks 2025", videoId: "fnPhJHN0jTE", channel: "TechWorld", views: "150K", time: "2 weeks ago" },
       { id: "9", title: "React Crash Course 2025", videoId: "w7ejDZ8SWv8", channel: "Traversy Media", views: "4M", time: "2 years ago" },
       { id: "10", title: "Build a Portfolio Website", videoId: "xV7S8BhIeBo", channel: "Kevin Powell", views: "900K", time: "1 year ago" },
@@ -35,15 +33,24 @@ auth.onAuthStateChanged(user => {
     let likedVideos = JSON.parse(localStorage.getItem("likedVideos")) || [];
     let watchLater = JSON.parse(localStorage.getItem("watchLater")) || [];
 
-    function loadVideos(filter = "home") {
+    // Attach functions to 'window' to make them global
+    window.loadVideos = function(filter = "home") {
       const feed = document.getElementById("video-feed");
       feed.innerHTML = "";
+      
+      document.querySelectorAll(".sidebar li").forEach(li => li.classList.remove('active'));
+      const activeLi = document.querySelector(`.sidebar li[data-filter="${filter}"]`);
+      if (activeLi) activeLi.classList.add('active');
+
       let list = videos;
       if (filter === "liked") list = videos.filter(v => likedVideos.includes(v.id));
       if (filter === "watchLater") list = videos.filter(v => watchLater.includes(v.id));
 
-      if (list.length === 0 && filter !== "home") {
-        feed.innerHTML = `<p class="no-videos-message">No videos in ${filter}.</p>`;
+      if (list.length === 0) {
+        let message = "No videos to show.";
+        if (filter === "liked") message = "You haven't liked any videos yet.";
+        if (filter === "watchLater") message = "You have no videos in your Watch Later list.";
+        feed.innerHTML = `<p class="no-videos-message">${message}</p>`;
         return;
       }
 
@@ -76,32 +83,39 @@ auth.onAuthStateChanged(user => {
       });
     }
 
-    function toggleLike(id) {
+    window.toggleLike = function(id) {
       likedVideos = likedVideos.includes(id) ? likedVideos.filter(v => v !== id) : [...likedVideos, id];
       localStorage.setItem("likedVideos", JSON.stringify(likedVideos));
-      loadVideos(document.querySelector(".sidebar li.active").dataset.filter);
+      const activeFilter = document.querySelector(".sidebar li.active").dataset.filter;
+      loadVideos(activeFilter);
     }
 
-    function toggleWatchLater(id) {
+    window.toggleWatchLater = function(id) {
       watchLater = watchLater.includes(id) ? watchLater.filter(v => v !== id) : [...watchLater, id];
       localStorage.setItem("watchLater", JSON.stringify(watchLater));
-      loadVideos(document.querySelector(".sidebar li.active").dataset.filter);
+      const activeFilter = document.querySelector(".sidebar li.active").dataset.filter;
+      loadVideos(activeFilter);
     }
 
-    function searchVideos() {
+    window.searchVideos = function() {
       const q = document.getElementById("search").value.toLowerCase();
-      const result = videos.filter(v => v.title.toLowerCase().includes(q) || v.channel.toLowerCase().includes(q));
+      const results = videos.filter(v => v.title.toLowerCase().includes(q) || v.channel.toLowerCase().includes(q));
       const feed = document.getElementById("video-feed");
       feed.innerHTML = "";
-      if (result.length === 0) {
+
+      document.querySelectorAll(".sidebar li").forEach(li => li.classList.remove('active'));
+
+      if (results.length === 0) {
         feed.innerHTML = `<p class="no-videos-message">No results for "${q}".</p>`;
         return;
       }
-      result.forEach(v => {
+
+      results.forEach(v => {
         const card = document.createElement("div");
+        const isLiked = likedVideos.includes(v.id);
+        const isSaved = watchLater.includes(v.id);
         card.className = "video-card";
         
-        // (Fixed a small typo in your link here, 'https.www...')
         card.innerHTML = `
           <div class="video-thumb">
             <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank">
@@ -110,94 +124,47 @@ auth.onAuthStateChanged(user => {
           </div>
           <div class="video-info">
             <h4>
-              <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank">
+              <a href="https://www.youtube.com/watch?v=${v.videoId}"
                 ${v.title}
               </a>
             </h4>
             <p class="channel">${v.channel}</p>
             <p class="views-time">${v.views} views • ${v.time}</p>
+            <div class="video-actions">
+              <button class="like ${isLiked ? 'liked' : ''}" onclick="event.stopPropagation(); toggleLike('${v.id}')">❤️ Like</button>
+              <button class="watchlater ${isSaved ? 'saved' : ''}" onclick="event.stopPropagation(); toggleWatchLater('${v.id}')">⏰ Watch Later</button>
+            </div>
           </div>`;
         feed.appendChild(card);
       });
     }
 
-    // MERGED: Both listeners are now inside one DOMContentLoaded
-    document.addEventListener("DOMContentLoaded", () => {
-      
-      // 1. Load the videos first
-      loadVideos("home");
+    // This code now runs as soon as auth is confirmed.
+    
+    // 1. Load the videos first
+    loadVideos("home");
 
-      // 2. Set up the search input
-      const searchInput = document.getElementById("search");
-      if(searchInput) {
-        searchInput.addEventListener("keyup", function () {
-          const query = this.value.trim().toLowerCase();
-          const videoFeed = document.getElementById("video-feed");
-          videoFeed.innerHTML = "";
-
-          const filtered = videos.filter(
-            (v) =>
-              v.title.toLowerCase().includes(query) ||
-              v.channel.toLowerCase().includes(query)
-          );
-
-          if (filtered.length === 0) {
-            videoFeed.innerHTML = `<p class="no-videos-message">No results found for "${query}".</p>`;
-            return;
-          }
-
-          filtered.forEach((v) => {
-            const card = document.createElement("div");
-            card.className = "video-card";
-            
-            card.innerHTML = `
-              <div class="video-thumb">
-                <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank">
-                  <img src="https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg" alt="${v.title}">
-                </a>
-              </div>
-              <div class="video-info">
-                <h4>
-                  <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank">
-                    ${v.title}
-                  </a>
-                </h4>
-                <p class="channel">${v.channel}</p>
-                <p class="views-time">${v.views} views • ${v.time}</p>
-              </div>
-            `;
-            videoFeed.appendChild(card);
-          });
+    // 2. --- LOGOUT BUTTON LOGIC ---
+    const btnLogout = document.getElementById('btnLogout');
+    if (btnLogout) {
+      btnLogout.addEventListener('click', () => {
+        auth.signOut().then(() => {
+          console.log('User signed out');
+          alert('You have been logged out.');
+          // onAuthStateChanged will see the change and redirect
+        }).catch(error => {
+          console.error('Sign out error:', error);
         });
-      }
-
-      // 3. --- LOGOUT BUTTON LOGIC ---
-      // We put this inside DOMContentLoaded to make sure the button exists
-      const btnLogout = document.getElementById('btnLogout');
-      if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
-          auth.signOut().then(() => {
-            console.log('User signed out');
-            // No need to redirect, the auth.onAuthStateChanged listener
-            // will detect the change and handle the redirect for us.
-            alert('You have been logged out.');
-          }).catch(error => {
-            console.error('Sign out error:', error);
-          });
-        });
-      }
-      // --- END OF LOGOUT LOGIC ---
-
-    });
-
-    // --- END of your original code ---
+      });
+    }
+    // --- END OF LOGOUT LOGIC ---
 
   } else {
     // --- USER IS NOT LOGGED IN ---
     console.log("No user is logged in. Redirecting...");
-    // Check if we are already on the login page to avoid an infinite loop
-    if (window.location.pathname !== '/login.html' && window.location.pathname !== '/login') {
-      window.location.href = '/login.html';
+    
+    if (!window.location.pathname.endsWith('login.html')) {
+      window.location.href = 'login.html';
     }
   }
 });
