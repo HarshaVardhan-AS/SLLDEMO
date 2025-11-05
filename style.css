@@ -165,3 +165,15 @@ button.saved {
   background: #007bff;
   color: white;
 }
+.logout-btn {
+  padding: 8px 15px;
+  background-color: #c00;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.logout-btn:hover {
+  background-color: #a00;
+}
